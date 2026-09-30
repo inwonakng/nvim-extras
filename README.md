@@ -1,7 +1,7 @@
 # nvim-extras
 
-A collection of independent Neovim Lua modules used by `pi-console` and
-`litenvim`. The repository has no global setup, and installing it does not
+A collection of independent Neovim Lua modules for rendering Markdown math
+and tables. The repository has no global setup, and installing it does not
 enable any module.
 
 ## Modules
@@ -52,19 +52,15 @@ vim.pack.add({
 })
 ```
 
-For local development, prepend the checkout directly:
+For local development, prepend a checkout directly so changes are available
+without reinstalling the package:
 
 ```lua
-vim.opt.runtimepath:prepend(vim.fn.expand("~/Documents/projects/nvim-extras"))
+vim.opt.runtimepath:prepend(vim.fn.expand("~/path/to/nvim-extras"))
 ```
 
 This library does not carry a plugin lockfile. Applications should pin the
 revision they consume in their own dependency lockfile.
-
-## Project status
-
-This is an initial extraction from a personal Neovim configuration. Packaging,
-compatibility checks, and public release automation are still in progress.
 
 ## License
 
