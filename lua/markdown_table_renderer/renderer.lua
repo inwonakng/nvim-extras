@@ -10,36 +10,21 @@ local function set_highlights()
 	vim.api.nvim_set_hl(0, "MarkdownTableCell", { default = true, link = "Normal" })
 end
 
-local function place(buf, parsed, lines, priority)
-	local line_count = vim.api.nvim_buf_line_count(buf)
-	if parsed.start_row < 0 or parsed.end_row > line_count or parsed.start_row >= parsed.end_row then
+local function place(buf, block, priority)
+	local source = vim.api.nvim_buf_get_lines(buf, block.source_row, block.source_row + 1, false)[1]
+	if not source then
 		return false
 	end
 
-	local anchor
-	if parsed.start_row > 0 then
-		anchor = { row = parsed.start_row - 1, above = false }
-	else
-		-- A one-past-EOF extmark remains a visible virtual-line anchor when the
-		-- table occupies the entire buffer. `strict = false` permits that row.
-		anchor = { row = parsed.end_row, above = true }
-	end
-
-	for row = parsed.start_row, parsed.end_row - 1 do
-		vim.api.nvim_buf_set_extmark(buf, namespace, row, 0, {
-			conceal_lines = "",
-			invalidate = true,
-			priority = priority,
-			strict = false,
-			undo_restore = false,
-		})
-	end
-	vim.api.nvim_buf_set_extmark(buf, namespace, anchor.row, 0, {
-		virt_lines = lines,
-		virt_lines_above = anchor.above,
+	-- Conceal text, not the buffer line: normal motions must still reach each row.
+	vim.api.nvim_buf_set_extmark(buf, namespace, block.source_row, 0, {
+		end_col = #source,
+		conceal = "",
+		virt_text = block.lines[1],
+		virt_text_pos = "overlay",
+		virt_lines = vim.list_slice(block.lines, 2),
 		invalidate = true,
 		priority = priority,
-		strict = false,
 		undo_restore = false,
 	})
 	return true
@@ -50,9 +35,9 @@ function M.apply(buf, tables, config, win, focused)
 	set_highlights()
 	local rendered = 0
 	for _, parsed in ipairs(tables) do
-		if not focused(parsed) then
-			local lines = Layout.render(parsed, config, win)
-			if place(buf, parsed, lines, config.priority) then
+		local blocks = Layout.render(parsed, config, win)
+		for _, block in ipairs(blocks) do
+			if not focused(parsed, block.source_row) and place(buf, block, config.priority) then
 				rendered = rendered + 1
 			end
 		end

@@ -25,8 +25,9 @@ required TeX packages, behavior, and configuration.
 
 ### `markdown_table_renderer`
 
-Renders GFM pipe tables with concealed source lines and wrapped virtual lines,
-while leaving the Markdown buffer unchanged.
+Renders GFM pipe tables with concealed source text and wrapped virtual lines.
+In Normal mode, only the cursor's row reveals its source, so the rest of the
+table stays rendered while navigating. The Markdown buffer remains unchanged.
 
 ```lua
 require("markdown_table_renderer").setup({

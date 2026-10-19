@@ -259,17 +259,33 @@ function M.render(parsed, config, win)
 	end
 
 	local widths = column_widths(parsed, cell_units, config, win)
-	local lines = { border_line(parsed.prefix, borders.top, widths) }
-	vim.list_extend(lines, render_row(parsed.prefix, header, widths, parsed.alignments, "MarkdownTableHeader"))
-	lines[#lines + 1] = border_line(parsed.prefix, borders.middle, widths)
+	-- Put the top border on the retained header line, rather than above it:
+	-- virtual lines above the first buffer line can be clipped by the viewport.
+	local header_lines = { border_line(parsed.prefix, borders.top, widths) }
+	vim.list_extend(header_lines, render_row(parsed.prefix, header, widths, parsed.alignments, "MarkdownTableHeader"))
+	local blocks = {
+		{
+			source_row = parsed.header_row,
+			lines = header_lines,
+		},
+		{
+			source_row = parsed.delimiter_row,
+			lines = { border_line(parsed.prefix, borders.middle, widths) },
+		},
+	}
 	for index = 2, #cell_units do
-		vim.list_extend(lines, render_row(parsed.prefix, cell_units[index], widths, parsed.alignments, "MarkdownTableCell"))
-		if config.row_separator and index < #cell_units then
+		local lines = render_row(parsed.prefix, cell_units[index], widths, parsed.alignments, "MarkdownTableCell")
+		if index == #cell_units then
+			lines[#lines + 1] = border_line(parsed.prefix, borders.bottom, widths)
+		elseif config.row_separator then
 			lines[#lines + 1] = border_line(parsed.prefix, borders.middle, widths)
 		end
+		blocks[#blocks + 1] = { source_row = parsed.source_rows[index - 1], lines = lines }
 	end
-	lines[#lines + 1] = border_line(parsed.prefix, borders.bottom, widths)
-	return lines
+	if #cell_units == 1 then
+		blocks[2].lines[#blocks[2].lines + 1] = border_line(parsed.prefix, borders.bottom, widths)
+	end
+	return blocks
 end
 
 return M

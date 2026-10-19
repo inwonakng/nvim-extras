@@ -54,13 +54,30 @@ local function table_at_cursor(tables, win)
 	return nil
 end
 
-local function table_focused(buf, parsed)
-	return table_at_cursor({ parsed }, active_window_for(buf)) ~= nil
+local function focus_context(buf, tables)
+	local win = active_window_for(buf)
+	if not win then
+		return nil
+	end
+	local row = vim.api.nvim_win_get_cursor(win)[1] - 1
+	local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
+	if mode == "v" or mode == "V" or mode == "\22" then
+		local anchor = vim.fn.getpos("v")[2] - 1
+		return { first = math.min(row, anchor), last = math.max(row, anchor), whole_table = true }
+	end
+	local parsed = table_at_cursor(tables, win)
+	if not parsed then
+		return nil
+	end
+	if mode == "i" or mode == "R" then
+		return { first = parsed.start_row, last = parsed.end_row - 1, whole_table = true }
+	end
+	return { first = row, last = row, whole_table = false }
 end
 
 local function focus_signature(buf, tables)
-	local parsed = table_at_cursor(tables, active_window_for(buf))
-	return parsed and parsed.id or ""
+	local focus = focus_context(buf, tables)
+	return focus and ("%d:%d:%s"):format(focus.first, focus.last, tostring(focus.whole_table)) or ""
 end
 
 local function ensure_conceallevel(buf)
@@ -101,8 +118,15 @@ local function render(buf)
 	end
 	state.tables = tables
 	state.focus_signature = focus_signature(buf, tables)
-	local rendered = Renderer.apply(buf, tables, config, win, function(parsed)
-		return table_focused(buf, parsed)
+	local focus = focus_context(buf, tables)
+	local rendered = Renderer.apply(buf, tables, config, win, function(parsed, row)
+		if not focus then
+			return false
+		end
+		if focus.whole_table then
+			return parsed.start_row <= focus.last and parsed.end_row > focus.first
+		end
+		return row == focus.first
 	end)
 	if rendered > 0 then
 		ensure_conceallevel(buf)

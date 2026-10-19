@@ -148,6 +148,7 @@ local function parse_table(node, buf)
 	end
 
 	local rows = {}
+	local source_rows = {}
 	local _, start_col = header_node:range()
 	local start_row = select(1, header_node:range())
 	local end_row = select(1, delimiter_node:range()) + 1
@@ -160,7 +161,8 @@ local function parse_table(node, buf)
 			cells[#cells + 1] = ""
 		end
 		rows[#rows + 1] = cells
-		end_row = select(1, row_node:range()) + 1
+		source_rows[#source_rows + 1] = select(1, row_node:range())
+		end_row = source_rows[#source_rows] + 1
 	end
 
 	local source_line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1] or ""
@@ -170,8 +172,11 @@ local function parse_table(node, buf)
 		end_row = end_row,
 		prefix = source_line:sub(1, start_col),
 		header = header,
+		header_row = start_row,
+		delimiter_row = select(1, delimiter_node:range()),
 		alignments = alignments,
 		rows = rows,
+		source_rows = source_rows,
 	}
 end
 
