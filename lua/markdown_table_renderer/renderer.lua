@@ -21,7 +21,8 @@ local function place(buf, block, priority)
 		end_col = #source,
 		conceal = "",
 		virt_text = block.lines[1],
-		virt_text_pos = "overlay",
+		-- Occupy layout space so end-of-line diagnostics follow the rendered row.
+		virt_text_pos = "inline",
 		virt_lines = vim.list_slice(block.lines, 2),
 		invalidate = true,
 		priority = priority,

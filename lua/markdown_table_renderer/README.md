@@ -4,6 +4,8 @@ A local Neovim renderer for GFM pipe tables. It keeps the Markdown buffer as the
 
 In Normal mode, only the cursor's row reveals its Markdown source; the rest of the table stays rendered. Ordinary `j`/`k` motions reach every source row, including the header and delimiter. Insert and Replace modes reveal the whole table containing the cursor. Characterwise, linewise, and blockwise Visual selections reveal every table they intersect, even when the selection endpoints are outside the table. Leaving those modes restores row-based rendering. The renderer never changes `wrap` or rewrites source text.
 
+Native end-of-line diagnostic text appears after the rendered row's right border, rather than over its cells. Wrapped continuations remain below that first display line. Revealed source rows use Neovim's ordinary diagnostic placement.
+
 ## Requirements
 
 - Neovim 0.11 or newer
@@ -39,4 +41,4 @@ With the Tree-sitter parsers installed on Neovim's runtimepath, run from the che
 nvim --headless -u NONE -i NONE -n -c "lua dofile('tests/markdown_table_renderer.lua')"
 ```
 
-The tests exercise screen output, source-row navigation, mode transitions, selections spanning tables, resizing, edits and undo, and tables at buffer boundaries.
+The tests exercise screen output, diagnostic placement on rendered and revealed rows, source-row navigation, mode transitions, selections spanning tables, resizing, edits and undo, and tables at buffer boundaries.

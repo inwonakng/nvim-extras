@@ -113,6 +113,49 @@ thread = coroutine.create(function()
 	contains(view, "╰────────────┴────────╯")
 	assert(not view:find("| long text", 1, true), "Concealed source leaked into rendering")
 
+	-- Native end-of-line diagnostics must follow the whole rendered row, even
+	-- when the warning points into the concealed leftmost cell.
+	local diagnostic_ns = vim.api.nvim_create_namespace("markdown-table-renderer-test-diagnostics")
+	vim.diagnostic.config({
+		virtual_text = {
+			spacing = 2,
+			prefix = "●",
+			format = function() return "" end,
+		},
+		signs = false,
+		underline = true,
+	}, diagnostic_ns)
+	local diagnostics = {
+		{ lnum = 4, col = 2, end_col = 6, message = "Left cell warning", severity = vim.diagnostic.severity.WARN },
+		{ lnum = 5, col = 2, end_col = 3, message = "Short row warning", severity = vim.diagnostic.severity.WARN },
+	}
+	local function diagnostic_after(text, row)
+		assert(text:find(vim.pesc(row) .. " +●"), "Diagnostic must follow row: " .. row .. "\n" .. text)
+	end
+	vim.diagnostic.set(diagnostic_ns, buf, vim.deepcopy(diagnostics))
+	view = screen()
+	diagnostic_after(view, "│ long text  │ x      │")
+	contains(view, "│ long text  │        │\n│ long text  │        │")
+	diagnostic_after(view, "│ c          │ d      │")
+	contains(view, "╰────────────┴────────╯")
+	unchanged()
+
+	move(5)
+	expect_rows({ 2, 3, 5 })
+	view = screen()
+	diagnostic_after(view, source[5])
+	diagnostic_after(view, "│ c          │ d      │")
+	move(1)
+	expect_rows({ 2, 3, 4, 5 })
+	diagnostic_after(screen(), "│ long text  │ x      │")
+	equal(diagnostics, vim.tbl_map(function(diagnostic)
+		return {
+			lnum = diagnostic.lnum, col = diagnostic.col, end_col = diagnostic.end_col,
+			message = diagnostic.message, severity = diagnostic.severity,
+		}
+	end, vim.diagnostic.get(buf, { namespace = diagnostic_ns })), "Rendering changed diagnostics")
+	vim.diagnostic.reset(diagnostic_ns, buf)
+
 	local parsed = tables.scan(buf)[1]
 	equal(2, parsed.header_row, "Header source position")
 	equal(3, parsed.delimiter_row, "Delimiter source position")
