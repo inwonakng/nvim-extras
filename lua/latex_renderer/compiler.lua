@@ -5,7 +5,9 @@ local pending = {}
 local jobs = {}
 local active_jobs = 0
 local max_jobs = 2
-local template_version = "2"
+local template_version = "3"
+local initial_canvas_width = 400
+local max_canvas_width = 8000
 local next_job_id = 0
 local run_next
 
@@ -24,13 +26,15 @@ local function write_file(path, content)
 	return true
 end
 
-local function document(source, color)
+local function document(source, color, canvas_width)
 	local prefix = ([[
-\documentclass[preview,border=2pt,varwidth,12pt]{standalone}
+\documentclass[preview,border=2pt,varwidth=%dpt,12pt]{standalone}
 \usepackage{xcolor,amsmath,amssymb,amsfonts,amscd,mathtools}
+\setlength{\textwidth}{%dpt}
+\hfuzz=0pt
 \begin{document}
 {\Large\color[HTML]{%s}
-]]):format(color)
+]]):format(canvas_width, canvas_width, color)
 	local suffix = [[
 }
 \end{document}
@@ -164,8 +168,11 @@ local function inspect_png(job, path, callback)
 end
 
 local function run_job(job)
+	local canvas_width = initial_canvas_width
 	local function render_source()
-		local ok, err = write_file(job.tex_path, job.tex)
+		local tex
+		tex, job.source_start_line = document(job.source, job.color, canvas_width)
+		local ok, err = write_file(job.tex_path, tex)
 		if not ok then
 			complete(job, nil, "could not write TeX source: " .. tostring(err))
 			return
@@ -179,13 +186,39 @@ local function run_job(job)
 			"-output-directory=" .. cache_dir,
 			job.tex_path,
 		}, { cwd = cache_dir, text = true, timeout = 15000 }, function(latex_result)
+			local output = table.concat({ latex_result.stderr or "", latex_result.stdout or "" }, "\n")
+			local preserved_paths = {
+				[job.tex_path] = true,
+				[job.log_path] = true,
+			}
 			if latex_result.code ~= 0 then
-				local output = table.concat({ latex_result.stderr or "", latex_result.stdout or "" }, "\n")
-				local preserved_paths = {
-					[job.tex_path] = true,
-					[job.log_path] = true,
-				}
 				complete(job, nil, latex_error_message(job, output), preserved_paths)
+				return
+			end
+
+			-- Display math does not wrap: varwidth can crop a successful PDF.
+			local overflow = 0
+			for amount in output:gmatch("Overfull \\hbox %(([%d%.]+)pt too wide%)") do
+				overflow = math.max(overflow, tonumber(amount))
+			end
+			if overflow > 0 then
+				if canvas_width >= max_canvas_width then
+					complete(
+						job,
+						nil,
+						("Equation still overflows an %dpt canvas; refusing to render a clipped image.\nLog: %s"):format(
+							max_canvas_width,
+							vim.fn.fnamemodify(job.log_path, ":~")
+						),
+						preserved_paths
+					)
+					return
+				end
+				canvas_width = math.min(
+					max_canvas_width,
+					math.max(canvas_width * 2, math.ceil(canvas_width + overflow + 1))
+				)
+				render_source()
 				return
 			end
 			pcall(vim.uv.fs_unlink, job.temp_png_path)
@@ -288,13 +321,11 @@ function M.compile(source, color, callback)
 	local pdf_path = vim.fs.joinpath(cache_dir, basename .. ".pdf")
 	local temp_png_path = vim.fs.joinpath(cache_dir, basename .. ".png")
 	local log_path = vim.fs.joinpath(cache_dir, basename .. ".log")
-	local tex, source_start_line = document(source, color)
 	local job = {
 		accepting = true,
 		key = key,
 		source = source,
-		source_start_line = source_start_line,
-		tex = tex,
+		color = color,
 		tex_path = tex_path,
 		log_path = log_path,
 		pdf_path = pdf_path,
