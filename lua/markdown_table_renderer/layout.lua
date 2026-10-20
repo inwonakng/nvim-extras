@@ -15,7 +15,11 @@ local function width(text)
 end
 
 local function unit_width(unit)
-	return width(unit.text)
+	local result = width(unit.text)
+	for _, line in ipairs(unit.lines or {}) do
+		result = math.max(result, width(line))
+	end
+	return result
 end
 
 local function append_chunk(chunks, text, highlight)
@@ -48,7 +52,7 @@ local function words(units)
 	local result = {}
 	local current = {}
 	for _, unit in ipairs(units) do
-		if unit.text:match("^%s+$") then
+		if not unit.lines and unit.text:match("^%s+$") then
 			if #current > 0 then
 				result[#result + 1] = current
 				current = {}
@@ -128,6 +132,35 @@ local function wrap(units, limit)
 		lines[1] = {}
 	end
 	return lines
+end
+
+-- Expand each wrapped logical line around a shared math baseline. Treat a
+-- formula as one box when wrapping, so its fraction bars/scripts stay intact.
+local function expand(lines)
+	local result = {}
+	for _, units in ipairs(lines) do
+		local above, below = 0, 0
+		for _, unit in ipairs(units) do
+			if unit.lines then
+				above = math.max(above, unit.baseline - 1)
+				below = math.max(below, #unit.lines - unit.baseline)
+			end
+		end
+		for offset = -above, below do
+			local row = {}
+			for _, unit in ipairs(units) do
+				local text = ""
+				if unit.lines then
+					text = unit.lines[unit.baseline + offset] or ""
+				elseif offset == 0 then
+					text = unit.text
+				end
+				row[#row + 1] = { text = text .. string.rep(" ", unit_width(unit) - width(text)), hl = unit.hl }
+			end
+			result[#result + 1] = row
+		end
+	end
+	return result
 end
 
 local function natural_width(units)
@@ -213,7 +246,7 @@ local function render_row(prefix, row, widths, alignments, fallback)
 	local wrapped = {}
 	local height = 1
 	for column, column_width in ipairs(widths) do
-		wrapped[column] = wrap(row[column] or {}, column_width)
+		wrapped[column] = expand(wrap(row[column] or {}, column_width))
 		height = math.max(height, #wrapped[column])
 	end
 
@@ -243,17 +276,46 @@ local function render_row(prefix, row, widths, alignments, fallback)
 	return result
 end
 
-function M.render(parsed, config, win)
+function M.render(parsed, config, win, entries)
+	local by_row = {}
+	for _, entry in pairs(entries or {}) do
+		if entry.output and entry.item.start_row == entry.item.end_row then
+			local row = entry.item.start_row
+			by_row[row] = by_row[row] or {}
+			by_row[row][#by_row[row] + 1] = entry
+		end
+	end
+	local function cell_units_at(cell, row, range)
+		local math = {}
+		for _, entry in ipairs(by_row[row] or {}) do
+			local item = entry.item
+			if range and item.start_col >= range.start_col and item.end_col <= range.end_col then
+				local start_col = item.start_col - range.start_col
+				local end_col = item.end_col - range.start_col
+				-- A conversion can finish between an edit and the next math scan.
+				if cell:sub(start_col + 1, end_col) == item.text then
+					math[#math + 1] = {
+						start_col = start_col,
+						end_col = end_col,
+						output = entry.output,
+						baseline = entry.baseline,
+					}
+				end
+			end
+		end
+		return Inline.with_math(cell, math)
+	end
 	local cell_units = {}
 	local header = {}
 	for column, cell in ipairs(parsed.header) do
-		header[column] = Inline.units(cell)
+		header[column] = cell_units_at(cell, parsed.header_row, parsed.header_ranges[column])
 	end
 	cell_units[1] = header
-	for _, row in ipairs(parsed.rows) do
+	for index, row in ipairs(parsed.rows) do
 		local converted = {}
+		local ranges = parsed.row_ranges[index]
 		for column, cell in ipairs(row) do
-			converted[column] = Inline.units(cell)
+			converted[column] = cell_units_at(cell, parsed.source_rows[index], ranges[column])
 		end
 		cell_units[#cell_units + 1] = converted
 	end

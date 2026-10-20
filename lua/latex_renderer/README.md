@@ -96,6 +96,7 @@ latex = {
 - LaTeX trees injected directly from fenced code blocks are ignored.
 - Only equations in or near a visible viewport are converted or compiled.
 - Raw inline source is shown for every equation on the cursor line.
+- When `markdown_table_renderer` is enabled, it lays out converted inline math inside cells and controls source reveal. Standalone math decorations never decorate table-controlled rows, including rows revealed for editing or selection. Display-style math in cells remains source text instead of placing a Kitty image.
 - Successful inline conversions and their `utftex` baselines are cached in memory by source.
 - PNGs are cached under `stdpath("cache")/latex-renderer` using the source and foreground color.
 - At most two LaTeX compilation jobs run concurrently.

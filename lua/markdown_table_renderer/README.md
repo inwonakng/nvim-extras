@@ -23,12 +23,15 @@ require("markdown_table_renderer").setup({
 
 Another Markdown renderer may handle the rest of the document, but its pipe-table renderer must be disabled.
 
+When `latex_renderer` is also enabled, converted inline math is laid out inside table cells before column sizing and wrapping. Multiline formulas retain their baselines and stay together when wrapping. Revealed rows show the original math source, with no separate math decorations. Pending or failed conversions remain readable as source text. Setup order does not matter; enabling tables alone does not load the math renderer or require `utftex`.
+
 ## Commands
 
 - `:MarkdownTableRendererRefresh` clears cached inline parsing and redraws tables.
 
 ## Limitations
 
+- Display-style math such as `$$…$$` inside cells remains source text; table cells do not place Kitty images. Use `$…$` for converted inline math. An indivisible formula can make its column wider than the configured width limit.
 - Wrapped virtual continuation lines are not cursor-addressable; `j`/`k` traverse source rows, not every displayed line.
 - Revealing a row can change its displayed height because its original Markdown replaces the rendered wrapping. Borders attached to that row also disappear while it is revealed.
 - Virtual decorations belong to a buffer, so when the same buffer appears in windows with different widths the renderer uses the active window's width. Rows or tables revealed in the active window are revealed in every window showing the buffer.
@@ -42,3 +45,10 @@ nvim --headless -u NONE -i NONE -n -c "lua dofile('tests/markdown_table_renderer
 ```
 
 The tests exercise screen output, diagnostic placement on rendered and revealed rows, source-row navigation, mode transitions, selections spanning tables, resizing, edits and undo, and tables at buffer boundaries.
+
+For math integration, also install the `latex` parser and run both setup orders (conversion is stubbed, so no external math executables are needed):
+
+```sh
+nvim --headless -u NONE -i NONE -n -c "lua dofile('tests/markdown_table_math.lua')"
+NVIM_EXTRAS_TABLE_FIRST=1 nvim --headless -u NONE -i NONE -n -c "lua dofile('tests/markdown_table_math.lua')"
+```

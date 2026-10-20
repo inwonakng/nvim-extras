@@ -328,9 +328,15 @@ local function send_entry(entry, force)
 	entry.sent_layout = layout
 end
 
+local function table_owned(buf, item)
+	local tables = package.loaded["markdown_table_renderer"]
+	return tables ~= nil and tables.owns(buf, item)
+end
+
 local function apply_entry(buf, entry, force_send)
 	clear_mark(buf, entry)
-	if item_focused(buf, entry.item) then
+	entry.table_owned = table_owned(buf, entry.item)
+	if entry.table_owned or item_focused(buf, entry.item) then
 		return
 	end
 
@@ -396,6 +402,41 @@ local function notify_inline_error(source, err)
 	})
 end
 
+local function queue_tables(buf)
+	local tables = package.loaded["markdown_table_renderer"]
+	if tables then
+		tables.queue(buf, true)
+	end
+end
+
+function M.inline_entries(buf)
+	local state = states[buf]
+	if state and valid_buf(buf) and state.changedtick == vim.api.nvim_buf_get_changedtick(buf) then
+		return state.inlines
+	end
+	return {}
+end
+
+function M.refresh(buf)
+	local state = states[buf]
+	if not state or not valid_buf(buf) then
+		return
+	end
+	local current = state.changedtick == vim.api.nvim_buf_get_changedtick(buf)
+	for _, entry in pairs(state.displays) do
+		if not current then
+			clear_mark(buf, entry)
+		elseif entry.meta and entry.table_owned ~= table_owned(buf, entry.item) then
+			apply_entry(buf, entry, false)
+		end
+	end
+	Inline.apply(buf, M.inline_entries(buf), function(item)
+		-- Tables also own revealed rows: Insert/Visual mode must expose the
+		-- original source throughout the table, not standalone math extmarks.
+		return table_owned(buf, item) or item_on_cursor_line(buf, item)
+	end)
+end
+
 local function render(buf)
 	local state = states[buf]
 	if not state or not valid_buf(buf) then
@@ -413,6 +454,7 @@ local function render(buf)
 		return
 	end
 	state.scan_error = nil
+	state.changedtick = vim.api.nvim_buf_get_changedtick(buf)
 
 	local active_displays = {}
 	local color = math_color()
@@ -456,6 +498,10 @@ local function render(buf)
 				end
 				expected.meta = meta
 				expected.image_id = Kitty.next_id()
+				if current.changedtick ~= vim.api.nvim_buf_get_changedtick(buf) then
+					M.queue(buf, true)
+					return
+				end
 				apply_entry(buf, expected, true)
 			end)
 		end
@@ -504,11 +550,14 @@ local function render(buf)
 					notify_inline_error(source, err or "unknown converter error")
 					return
 				end
+				if current.changedtick ~= vim.api.nvim_buf_get_changedtick(buf) then
+					M.queue(buf, true)
+					return
+				end
 				expected.output = result.output
 				expected.baseline = result.baseline
-				Inline.apply(buf, current.inlines, function(item)
-					return item_on_cursor_line(buf, item)
-				end)
+				M.refresh(buf)
+				queue_tables(buf)
 			end)
 		end
 	end
@@ -519,9 +568,8 @@ local function render(buf)
 			state.inlines[key] = nil
 		end
 	end
-	Inline.apply(buf, state.inlines, function(item)
-		return item_on_cursor_line(buf, item)
-	end)
+	M.refresh(buf)
+	queue_tables(buf)
 end
 
 function M.queue(buf, immediate)
@@ -614,6 +662,7 @@ function M.detach(buf)
 		Inline.clear(buf)
 	end
 	states[buf] = nil
+	queue_tables(buf)
 end
 
 local function queue_visible_markdown()

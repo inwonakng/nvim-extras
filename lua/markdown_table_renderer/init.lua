@@ -98,6 +98,41 @@ local function notify_once(message)
 	})
 end
 
+local function scan_tables(buf, state)
+	local tick = vim.api.nvim_buf_get_changedtick(buf)
+	if state.changedtick ~= tick then
+		local ok, tables = pcall(Parser.scan, buf)
+		state.tables = ok and tables or {}
+		state.changedtick = ok and tick or nil
+		if not ok then
+			notify_once(tostring(tables))
+		end
+	end
+	return state.tables
+end
+
+-- Optional cooperation only: loading tables must not activate the math module
+-- or require its external executables.
+local function refresh_math(buf)
+	local math_renderer = package.loaded["latex_renderer"]
+	if math_renderer then
+		math_renderer.refresh(buf)
+	end
+end
+
+function M.owns(buf, item)
+	local state = states[buf]
+	if not state or not valid_buffer(buf) then
+		return false
+	end
+	for _, parsed in ipairs(scan_tables(buf, state)) do
+		if item.start_row < parsed.end_row and item.end_row >= parsed.start_row then
+			return true
+		end
+	end
+	return false
+end
+
 local function render(buf)
 	local state = states[buf]
 	if not state or not valid_buffer(buf) then
@@ -109,14 +144,9 @@ local function render(buf)
 		return
 	end
 
-	local ok, tables = pcall(Parser.scan, buf)
-	if not ok then
-		Renderer.clear(buf)
-		state.tables = {}
-		notify_once(tostring(tables))
-		return
-	end
-	state.tables = tables
+	local tables = scan_tables(buf, state)
+	local math_renderer = package.loaded["latex_renderer"]
+	local entries = math_renderer and math_renderer.inline_entries(buf)
 	state.focus_signature = focus_signature(buf, tables)
 	local focus = focus_context(buf, tables)
 	local rendered = Renderer.apply(buf, tables, config, win, function(parsed, row)
@@ -127,10 +157,11 @@ local function render(buf)
 			return parsed.start_row <= focus.last and parsed.end_row > focus.first
 		end
 		return row == focus.first
-	end)
+	end, entries)
 	if rendered > 0 then
 		ensure_conceallevel(buf)
 	end
+	refresh_math(buf)
 end
 
 function M.queue(buf, immediate)
@@ -180,6 +211,7 @@ end
 function M.detach(buf)
 	Renderer.clear(buf)
 	states[buf] = nil
+	refresh_math(buf)
 end
 
 local function queue_visible_markdown(immediate)

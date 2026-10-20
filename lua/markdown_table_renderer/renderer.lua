@@ -31,12 +31,12 @@ local function place(buf, block, priority)
 	return true
 end
 
-function M.apply(buf, tables, config, win, focused)
+function M.apply(buf, tables, config, win, focused, entries)
 	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
 	set_highlights()
 	local rendered = 0
 	for _, parsed in ipairs(tables) do
-		local blocks = Layout.render(parsed, config, win)
+		local blocks = Layout.render(parsed, config, win, entries)
 		for _, block in ipairs(blocks) do
 			if not focused(parsed, block.source_row) and place(buf, block, config.priority) then
 				rendered = rendered + 1

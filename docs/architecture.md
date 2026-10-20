@@ -6,8 +6,15 @@ of them.
 
 Each top-level directory under `lua/` owns its setup, runtime checks, commands,
 and documentation. Modules must not require unrelated modules from this
-collection. External executables are checked by the module that needs them, so
-using the Markdown table renderer does not require a TeX installation.
+collection. Cooperating renderers may consult an already-loaded module without
+loading it or calling its setup. The table renderer reads LaTeX inline results
+this way, owns their layout inside cells, and requests that standalone math
+decorations stay off table-controlled rows (including revealed source rows).
+Display-style math in cells remains source; only inline math participates in cell
+layout. Conversion completion queues a table reflow; table attachment, rendering,
+and detachment refresh standalone decorations without starting new conversions.
+External executables are checked by the module that needs them, so using the
+Markdown table renderer alone does not require a TeX installation.
 
 The repository currently exports:
 

@@ -71,7 +71,7 @@ local function pipe_positions(text)
 	return positions
 end
 
-local function split_row(text)
+local function split_row(text, offset)
 	local positions = pipe_positions(text)
 	local spans = {}
 	local start_col = 1
@@ -90,10 +90,16 @@ local function split_row(text)
 	end
 
 	local cells = {}
+	local ranges = {}
 	for _, span in ipairs(spans) do
-		cells[#cells + 1] = trim(text:sub(span[1], span[2]))
+		local raw = text:sub(span[1], span[2])
+		local cell = trim(raw)
+		local leading = #(raw:match("^[ \t]*") or "")
+		local start_col = (offset or 0) + span[1] - 1 + leading
+		cells[#cells + 1] = cell
+		ranges[#ranges + 1] = { start_col = start_col, end_col = start_col + #cell }
 	end
-	return cells, #positions
+	return cells, #positions, ranges
 end
 
 local function alignment(cell)
@@ -133,7 +139,8 @@ local function parse_table(node, buf)
 		return nil
 	end
 
-	local header, header_pipes = split_row(row_text(header_node, buf))
+	local start_row, start_col = header_node:range()
+	local header, header_pipes, header_ranges = split_row(row_text(header_node, buf), start_col)
 	local delimiter = split_row(row_text(delimiter_node, buf))
 	if header_pipes == 0 or #header == 0 or #delimiter ~= #header then
 		return nil
@@ -149,11 +156,11 @@ local function parse_table(node, buf)
 
 	local rows = {}
 	local source_rows = {}
-	local _, start_col = header_node:range()
-	local start_row = select(1, header_node:range())
+	local row_ranges = {}
 	local end_row = select(1, delimiter_node:range()) + 1
 	for _, row_node in ipairs(row_nodes) do
-		local cells, pipes = split_row(row_text(row_node, buf))
+		local _, row_col = row_node:range()
+		local cells, pipes, ranges = split_row(row_text(row_node, buf), row_col)
 		if (#header > 1 and pipes == 0) or #cells > #header then
 			return nil
 		end
@@ -161,6 +168,7 @@ local function parse_table(node, buf)
 			cells[#cells + 1] = ""
 		end
 		rows[#rows + 1] = cells
+		row_ranges[#row_ranges + 1] = ranges
 		source_rows[#source_rows + 1] = select(1, row_node:range())
 		end_row = source_rows[#source_rows] + 1
 	end
@@ -172,6 +180,8 @@ local function parse_table(node, buf)
 		end_row = end_row,
 		prefix = source_line:sub(1, start_col),
 		header = header,
+		header_ranges = header_ranges,
+		row_ranges = row_ranges,
 		header_row = start_row,
 		delimiter_row = select(1, delimiter_node:range()),
 		alignments = alignments,

@@ -26,7 +26,7 @@ local function plain_units(text)
 	local index = 1
 	while index <= #text do
 		local length = char_length(text, index)
-		units[#units + 1] = { text = text:sub(index, index + length - 1) }
+		units[#units + 1] = { text = text:sub(index, index + length - 1), start_col = index - 1 }
 		index = index + length
 	end
 	return units
@@ -91,6 +91,7 @@ local function parse(text)
 		if replacement then
 			for _, unit in ipairs(plain_units(replacement.text)) do
 				unit.hl = replacement.hl
+				unit.start_col = index - 1
 				units[#units + 1] = unit
 			end
 		end
@@ -99,6 +100,7 @@ local function parse(text)
 			units[#units + 1] = {
 				text = text:sub(index, index + length - 1),
 				hl = highlights[index],
+				start_col = index - 1,
 			}
 		end
 		index = index + length
@@ -119,6 +121,41 @@ function M.units(text)
 	end
 	cache[text] = units
 	cache_size = cache_size + 1
+	return units
+end
+
+-- Math ranges are relative to the trimmed cell, unlike buffer extmarks.
+-- Keep dynamic conversion results out of the source-text parsing cache.
+function M.with_math(text, math)
+	local source = M.units(text)
+	if #math == 0 then
+		return source
+	end
+	table.sort(math, function(left, right)
+		return left.start_col < right.start_col
+	end)
+	local units = {}
+	local index = 1
+	for _, formula in ipairs(math) do
+		while source[index] and source[index].start_col < formula.start_col do
+			units[#units + 1] = source[index]
+			index = index + 1
+		end
+		while source[index] and source[index].start_col < formula.end_col do
+			index = index + 1
+		end
+		local lines = vim.split(formula.output, "\n", { plain = true })
+		units[#units + 1] = {
+			text = lines[formula.baseline],
+			lines = lines,
+			baseline = formula.baseline,
+			hl = "@markup.math",
+		}
+	end
+	while source[index] do
+		units[#units + 1] = source[index]
+		index = index + 1
+	end
 	return units
 end
 
