@@ -25,7 +25,9 @@ x = y
 
 The display-fence scanner owns these newline-delimited forms so Markdown constructs such as Setext heading underlines and list markers inside an equation do not split it. Tree-sitter continues to detect inline math and other LaTeX forms. Dedicated display ranges take precedence over overlapping Tree-sitter captures.
 
-Using `utftex` supports constructs such as `\mathcal`, `\mathbb`, fractions, roots, and scripts without maintaining a partial LaTeX parser here. Math delimiters inside fenced or indented code blocks and multiline code spans are ignored. LaTeX injected for fenced `tex` or `latex` code blocks remains syntax-highlighted source.
+Using `utftex` supports constructs such as `\mathcal`, `\mathbb`, fractions, and roots. Inline subscripts and superscripts retain their LaTeX notation, such as `e_{t,j}`, `x_1`, and `x^{n+1}`, on the same row as their base. Their arguments remain literal source, while symbols outside scripts still convert to Unicode. Script source line breaks and tabs render as spaces. Display math is unchanged.
+
+Math delimiters inside fenced or indented code blocks and multiline code spans are ignored. LaTeX injected for fenced `tex` or `latex` code blocks remains syntax-highlighted source.
 
 ## Dependencies
 
