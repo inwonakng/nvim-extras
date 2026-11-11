@@ -26,9 +26,21 @@ local ok, err = xpcall(function()
 		{ "x_1+x_2+x^2", "x_1+x_2+x^2" },
 		{ "x^{n+1}", "x^{n+1}" },
 		{ [[\alpha_{i}+\beta^{n+1}]], "α_{i}+β^{n+1}" },
-		{ [[x_{i_{j}}^{\frac{n}{2}}]], [[x_{i_{j}}^{\frac{n}{2}}]] },
-		{ [[x_\alpha+y^\beta]], [[x_\alpha+y^\beta]] },
-		{ [[x_{a\{b\}c}]], [[x_{a\{b\}c}]] },
+		{ [[x_{i_{j}}^{\frac{n}{2}}]], "x_{i_{j}}^{n/2}" },
+		{ [[x_\alpha+y^\beta]], "x_α+y^β" },
+		{ [[x_{a\{b\}c}]], "x_{a{b}c}" },
+		{ [[x_{\text{max}}+L_{\mathrm{CE}}]], "x_{max}+L_{CE}" },
+		{ [[\theta^{\star}]], "θ^{⋆}" },
+		{ [[e^{-\lambda t}]], "e^{-λt}" },
+		{ [[x_ {\alpha, j}]], "x_ {α, j}" },
+		{ [[x_{\beta_{\alpha}}]], "x_{β_{α}}" },
+		{ [[x^{\frac{n+1}{2}}]], "x^{(n+1)/2}" },
+		{ [[x^{\sqrt{n}}+y^{\sqrt[3]{n+1}}]], "x^{√n}+y^{∛(n+1)}" },
+		{ [[x^{\mathbf{\frac{a}{\sqrt{b}}}}]], "x^{𝐚/(√𝐛)}" },
+		-- Contents that fail or stay multi-row keep their source; one failure
+		-- must not prevent other scripts in the formula from converting.
+		{ [[x_{\foo}+\alpha_{\beta}]], [[x_{\foo}+α_{β}]] },
+		{ [[x^{\overline{AB}}]], [[x^{\overline{AB}}]] },
 		{ "x_ {i, j}^ {n + 1}", "x_ {i, j}^ {n + 1}" },
 		{ [[\mathbf{x_{i}}]], "𝐱_{i}" },
 		{ "x_{界,é}", "x_{界,é}" },
@@ -48,6 +60,8 @@ local ok, err = xpcall(function()
 	local fraction = convert([[\frac{x_{i}}{2}]])
 	equal("x_{i}\n─────\n  2", fraction.output, "Fraction layout lost script width")
 	equal(2, fraction.baseline, "Fraction lost its baseline")
+	local converted_fraction = convert([[\frac{x_{\alpha}}{2}]])
+	equal("x_{α}\n─────\n  2", converted_fraction.output, "Fraction layout lost converted script width")
 	local root = convert([[\sqrt{x_{i}}]])
 	assert(root.output:find("x_{i}", 1, true), "Root argument lost its literal script")
 	assert(root.baseline > 1, "Root layout was flattened")

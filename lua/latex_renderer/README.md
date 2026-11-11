@@ -25,7 +25,7 @@ x = y
 
 The display-fence scanner owns these newline-delimited forms so Markdown constructs such as Setext heading underlines and list markers inside an equation do not split it. Tree-sitter continues to detect inline math and other LaTeX forms. Dedicated display ranges take precedence over overlapping Tree-sitter captures.
 
-Using `utftex` supports constructs such as `\mathcal`, `\mathbb`, fractions, and roots. Inline subscripts and superscripts retain their LaTeX notation, such as `e_{t,j}`, `x_1`, and `x^{n+1}`, on the same row as their base. Their arguments remain literal source, while symbols outside scripts still convert to Unicode. Script source line breaks and tabs render as spaces. Display math is unchanged.
+Using `utftex` supports constructs such as `\mathcal`, `\mathbb`, fractions, and roots. Inline subscripts and superscripts retain their LaTeX notation, such as `e_{t,j}`, `x_1`, and `x^{n+1}`, on the same row as their base. The `_`, `^`, and braces stay literal, while commands inside script arguments convert to Unicode: `\alpha^{\beta}` renders as `α^{β}`, `x_\alpha` as `x_α`, and `x_{\text{max}}` as `x_{max}`. Fractions and roots inside scripts are written on one row, such as `x^{(n+1)/2}` and `x^{√n}`. A script argument that `utftex` rejects or can only draw over several rows, such as `\overline`, keeps its raw source. Script source line breaks and tabs render as spaces. Display math is unchanged.
 
 Math delimiters inside fenced or indented code blocks and multiline code spans are ignored. LaTeX injected for fenced `tex` or `latex` code blocks remains syntax-highlighted source.
 
@@ -99,6 +99,7 @@ latex = {
 - Only equations in or near a visible viewport are converted or compiled.
 - Raw inline source is shown for every equation on the cursor line.
 - When `markdown_table_renderer` is enabled, it lays out converted inline math inside cells and controls source reveal. Standalone math decorations never decorate table-controlled rows, including rows revealed for editing or selection. Display-style math in cells remains source text instead of placing a Kitty image.
+- An inline formula whose script arguments contain commands runs one extra `utftex` call to convert those arguments before layout. If that call fails, each argument is retried separately.
 - Successful inline conversions and their `utftex` baselines are cached in memory by source.
 - PNGs are cached under `stdpath("cache")/latex-renderer` using the source and foreground color.
 - At most two LaTeX compilation jobs run concurrently.
