@@ -102,6 +102,7 @@ latex = {
 - An inline formula whose script arguments contain commands runs one extra `utftex` call to convert those arguments before layout. If that call fails, each argument is retried separately.
 - Successful inline conversions and their `utftex` baselines are cached in memory by source.
 - PNGs are cached under `stdpath("cache")/latex-renderer` using the source and foreground color.
+- Inline conversion uses a shared queue with at most two `utftex` processes running concurrently, including script preprocessing and retries. Cancelled queued work is skipped, and spawn failures are reported as conversion errors.
 - At most two LaTeX compilation jobs run concurrently.
 - `:LatexRendererRefresh` retries failed equations and retransmits cached images.
 

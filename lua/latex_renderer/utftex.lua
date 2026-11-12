@@ -2,6 +2,9 @@ local M = {}
 
 local cache = {}
 local pending = {}
+local requests = {}
+local active_processes = 0
+local max_processes = 2
 local baseline_marker = vim.fn.nr2char(0xE000)
 
 -- Return the byte after a TeX token, including balanced groups and escaped
@@ -293,17 +296,47 @@ local function finish(job, converted, err)
 	end)
 end
 
--- Start a utftex process that the job's cancellation stops. on_exit runs on
--- the main loop, so it may call any Neovim API.
+-- Limit processes, rather than whole conversions: failed script batches may
+-- fan out into several retries, and those must share the same limit.
+local function run_next()
+	while active_processes < max_processes and #requests > 0 do
+		local request = table.remove(requests, 1)
+		local job = request.job
+		local process
+		active_processes = active_processes + 1
+		local function complete(result)
+			vim.schedule(function()
+				if process then
+					job.processes[process] = nil
+				end
+				active_processes = active_processes - 1
+				request.on_exit(result)
+				run_next()
+			end)
+		end
+		if not job.accepting then
+			complete({ code = 1, stderr = "conversion cancelled" })
+		else
+			local ok, result = pcall(vim.system, request.args, {
+				stdin = request.stdin,
+				text = true,
+				timeout = 15000,
+			}, complete)
+			if ok then
+				process = result
+				job.processes[process] = true
+			else
+				complete({ code = 1, stderr = "could not start utftex: " .. tostring(result) })
+			end
+		end
+	end
+end
+
+-- Queue every utftex call, including script preprocessing and retries.
+-- on_exit runs on the main loop, so it may call any Neovim API.
 local function run(job, args, stdin, on_exit)
-	local process
-	process = vim.system(args, { stdin = stdin, text = true, timeout = 15000 }, function(result)
-		vim.schedule(function()
-			job.processes[process] = nil
-			on_exit(result)
-		end)
-	end)
-	job.processes[process] = true
+	requests[#requests + 1] = { job = job, args = args, stdin = stdin, on_exit = on_exit }
+	run_next()
 end
 
 -- Convert script contents in one utftex call, keyed by piece. A piece maps to
