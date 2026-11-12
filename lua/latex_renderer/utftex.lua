@@ -33,6 +33,26 @@ local function token_end(source, start)
 	return character and start + #character or nil
 end
 
+-- utftex does not support \texttt; render its contents as regular text.
+local function normalize_texttt(source)
+	local parts, position, previous = {}, 1, 1
+	while position <= #source do
+		if source:sub(position, position) == "\\" then
+			local stop = token_end(source, position)
+			if source:sub(position, stop - 1) == "\\texttt" then
+				parts[#parts + 1] = source:sub(previous, position - 1)
+				parts[#parts + 1] = "\\text"
+				previous = stop
+			end
+			position = stop
+		else
+			position = position + 1
+		end
+	end
+	parts[#parts + 1] = source:sub(previous)
+	return table.concat(parts)
+end
+
 -- Call replace(operator, argument) for each top-level script and splice in its
 -- result. The operator keeps any whitespace before the argument.
 local function map_scripts(source, replace)
@@ -401,7 +421,7 @@ function M.convert(source, callback)
 	}
 	pending[source] = job
 	local cancel = subscribe(job, callback)
-	local plan = plan_conversion(source)
+	local plan = plan_conversion(normalize_texttt(source))
 	local function render(results)
 		if not job.accepting then
 			finish(job, nil, "conversion cancelled")
